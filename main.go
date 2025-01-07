@@ -16,27 +16,24 @@ const (
 )
 
 type Game struct {
-	indexesOfBullets int
-	indexShot        int
-	lifePlayer       int
-	lifeNpc          int
-	message          string
-	feed             []string
-	playerTurn       bool
-	gameOver         bool
-	timer            time.Time
-	waiting          bool
+	bulletsLeft int
+	lifePlayer  int
+	lifeNpc     int
+	message     string
+	feed        []string
+	playerTurn  bool
+	gameOver    bool
+	timer       time.Time
+	waiting     bool
 }
 
 func (g *Game) Update() error {
+	if g.bulletsLeft == 0 {
+		g.endGame()
+	}
+
 	if g.lifeNpc == 0 || g.lifePlayer == 0 {
-		g.gameOver = true
-		winnerMessage := "You!"
-		if g.lifeNpc > g.lifePlayer {
-			winnerMessage = "NPC!"
-		}
-		g.message = fmt.Sprintf("Game over... %s wins", winnerMessage)
-		g.addMessageOnFeed(g.message)
+		g.endGame()
 	}
 
 	if g.gameOver {
@@ -71,12 +68,12 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	position := fmt.Sprintf("Bullets in gun: %d/%d", g.indexesOfBullets, BULLET_DRUM)
+	position := fmt.Sprintf("Bullets left: %d/%d", g.bulletsLeft, BULLET_DRUM)
 	ebitenutil.DebugPrintAt(screen, position, 10, 10)
 
 	x, y := 10, 40
-	for i := 0; i < len(g.feed); i++ {
-		ebitenutil.DebugPrintAt(screen, g.feed[i], x, y)
+	for _, msg := range g.feed {
+		ebitenutil.DebugPrintAt(screen, msg, x, y)
 		y += 20
 	}
 
@@ -90,7 +87,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 func (g *Game) resetGame() {
 	g.lifeNpc = LIFE_POINTS
 	g.lifePlayer = LIFE_POINTS
-	g.indexesOfBullets = randomizes(1, BULLET_DRUM)
+	g.bulletsLeft = randomizes(LIFE_POINTS, BULLET_DRUM)
 	g.playerTurn = randomizes(1, 2) == 1
 	g.gameOver = false
 	g.feed = []string{}
@@ -108,33 +105,51 @@ func (g *Game) addMessageOnFeed(message string) {
 	}
 }
 
-/*
-TODO: Preciso fazer a lógica de contagem de balas
-Ex: Se tem 3 balas e o NPC dispara uma, sobram 2 de 5 para o Player
-*/
 func (g *Game) checkShot(isPlayer bool) {
-	g.indexShot = randomizes(1, BULLET_DRUM)
-	if g.indexShot > g.indexesOfBullets {
-		if isPlayer {
-			g.message = "BANG! You got hit..."
-			g.lifePlayer--
+	if g.bulletsLeft > 0 {
+		indexShot := randomizes(1, BULLET_DRUM)
+		if indexShot <= g.bulletsLeft {
+			if isPlayer {
+				g.message = "BANG! You got hit..."
+				g.lifePlayer--
+				g.bulletsLeft--
+			} else {
+				g.message = "BANG! NPC got hit..."
+				g.lifeNpc--
+				g.bulletsLeft--
+			}
 		} else {
-			g.message = "BANG! NPC got hit..."
-			g.lifeNpc--
+			if isPlayer {
+				g.message = "Click! You survived..."
+			} else {
+				g.message = "Click! NPC survived..."
+			}
 		}
-	} else {
-		if isPlayer {
-			g.message = "Click! You survived..."
-		} else {
-			g.message = "Click! NPC survived..."
-		}
+		g.addMessageOnFeed(g.message)
 	}
-	g.addMessageOnFeed(g.message)
 }
 
 func (g *Game) npcTurn() {
 	g.checkShot(false)
 	g.playerTurn = true
+}
+
+func (g *Game) endGame() {
+	g.gameOver = true
+	if g.lifeNpc == g.lifePlayer {
+		g.message = "Game over... It's a draw"
+		g.addMessageOnFeed(g.message)
+		return
+	}
+
+	var winnerMessage string
+	if g.lifeNpc > g.lifePlayer {
+		winnerMessage = "NPC wins!"
+	} else {
+		winnerMessage = "You wins!"
+	}
+	g.message = fmt.Sprintf("Game over... %s", winnerMessage)
+	g.addMessageOnFeed(g.message)
 }
 
 func main() {
